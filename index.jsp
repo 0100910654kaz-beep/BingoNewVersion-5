@@ -15,14 +15,14 @@
     }
     if (playerName == null) { playerName = ""; }
 
-    // 🔄【追加ルール】司会者がリセット（数字が0個）したら、古いカードの記憶を自動で消去する
+    // 🔄【重要】司会者がリセット（数字が0個）したら、古いカードを強制消去
     if (game != null && game.getDrawnNumbers().isEmpty()) {
         session.removeAttribute("card");
     }
 
     List<List<String>> bingoCard = (List<List<String>>) session.getAttribute("card");
 
-    // 🎲 カードが消えていたら、今の名前のまま自動で新しいカードを生成する
+    // 🎲 カードが消えていたら（リセット直後など）、今の名前のまま自動で新しいカードをランダム生成
     if (bingoCard == null && game != null && !playerName.isEmpty()) {
         List<List<Integer>> columns = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
@@ -41,7 +41,8 @@
             bingoCard.add(row);
         }
         session.setAttribute("card", bingoCard);
-        game.setPlayerCard(playerName, bingoCard); // サーバーへ新しいカードを登録
+        game.setPlayerCard(playerName, bingoCard); // ⚡ サーバー側にも即座に新カードを同期して登録
+        game.checkAllPlayersStatus();              // ⚡ リーチ判定を即座に再計算
     }
 
     List<Integer> reverseDrawnNumbers = new ArrayList<>();
