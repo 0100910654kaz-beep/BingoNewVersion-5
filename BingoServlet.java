@@ -79,13 +79,12 @@ public class BingoServlet extends HttpServlet {
                         int drawn = pool.get(0);
                         game.getDrawnNumbers().add(drawn);
                         
-                        // 🔥 玉が引かれたので全員のリーチ・ビンゴを再計算
-                        game.checkAllPlayersStatus();
+                        // ⚡ サーバー側の安全な新しい更新メソッドに修正
+                        game.updateAllPlayersStatus();
                     }
                 } else if ("reset".equals(action)) {
-                    game.getDrawnNumbers().clear();
-                    game.getBingoPlayers().clear();
-                    game.getReachPlayers().clear();
+                    // ⚡【確実なリセット】サーバー側の全データ（古いカードやリーチ状態）を完全に一括クリア
+                    game.clearGameDataOnly();
                 }
             }
             request.setAttribute("game", game);
@@ -131,7 +130,7 @@ public class BingoServlet extends HttpServlet {
                 session.removeAttribute("card");
             }
 
-            // ⚡【重要】現在の有効なカードをセッションから取得してサーバー側（BingoGame）に再同期
+            // 現在の有効なカードをセッションから取得してサーバー側に再同期
             List<List<String>> card = (List<List<String>>) session.getAttribute("card");
             if (card != null && confirmedName != null && !confirmedName.isEmpty()) {
                 game.setPlayerCard(confirmedName, card);
