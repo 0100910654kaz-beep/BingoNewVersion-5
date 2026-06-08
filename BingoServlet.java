@@ -36,7 +36,7 @@ public class BingoServlet extends HttpServlet {
             }
         }
 
-        // 🚀 2. 【正しい交通整理】
+        // 🚀 2. セッションから認証済みの名前を確実に取得
         String confirmedName = (String) session.getAttribute("myConfirmedName");
         
         if (action == null && !"admin".equals(userType) && confirmedName == null) {
@@ -79,6 +79,7 @@ public class BingoServlet extends HttpServlet {
                         int drawn = pool.get(0);
                         game.getDrawnNumbers().add(drawn);
                         
+                        // ⚡ 玉を引いたので全員のリーチ・ビンゴを再計算
                         game.checkAllPlayersStatus();
                     }
                 } else if ("reset".equals(action)) {
@@ -92,89 +93,83 @@ public class BingoServlet extends HttpServlet {
             return;
         }
 
-        // 🎯 4. プレイヤーの「参加（ログイン）」処理
-        if ("join".equals(action)) {
-            String inputGameId = request.getParameter("gameId");
-            String inputName = request.getParameter("playerName");
+        // 🎯 4. プレイヤーの処理（ログイン・自動更新共通の安全ルート）
+        if (game != null) {
+            // 司会者がログイン画面で「参加」ボタンを押した時
+            if ("join".equals(action)) {
+                String inputGameId = request.getParameter("gameId");
+                String inputName = request.getParameter("playerName");
 
-            if (inputName == null || inputName.trim().isEmpty()) {
-                if (game != null) {
+                if (inputName == null || inputName.trim().isEmpty()) {
                     inputName = game.generateAnonymousName();
                 } else {
-                    inputName = "ゲスト";
+                    inputName = inputName.trim();
                 }
-            } else {
-                inputName = inputName.trim();
-            }
 
-            if (game != null && game.getGameId().equals(inputGameId)) {
-                if (game.getAllPlayers().contains(inputName) && !inputName.equals(confirmedName)) {
-                    request.setAttribute("error", "⚠️ その名前はすでに使われています。");
+                if (game.getGameId().equals(inputGameId)) {
+                    if (game.getAllPlayers().contains(inputName) && !inputName.equals(confirmedName)) {
+                        request.setAttribute("error", "⚠️ その名前はすでに使われています。");
+                        request.getRequestDispatcher("index.jsp").forward(request, response);
+                        return;
+                    }
+                    
+                    if (!game.getAllPlayers().contains(inputName)) {
+                        game.getAllPlayers().add(inputName);
+                    }
+                    
+                    confirmedName = inputName;
+                    session.setAttribute("myConfirmedName", confirmedName);
+                } else {
+                    request.setAttribute("error", "⚠️ 部屋番号（ゲームID）が正しくありません。");
                     request.getRequestDispatcher("index.jsp").forward(request, response);
                     return;
                 }
-                
-                if (!game.getAllPlayers().contains(inputName)) {
-                    game.getAllPlayers().add(inputName);
-                }
-                
-                confirmedName = inputName;
-                session.setAttribute("myConfirmedName", confirmedName);
-                
-                // 🔄 司会者がゲームをリセット（数字が0個）している場合は、古いカードを強制破棄
-                if (game.getDrawnNumbers().isEmpty()) {
-                    session.removeAttribute("card");
-                }
-
-                List<List<String>> card = game.getPlayerCard(confirmedName);
-                
-                // 🔄 サーバー側にカードがあっても、リセット状態なら新しいランダムカードを作成する
-                if (card == null || game.getDrawnNumbers().isEmpty()) {
-                    List<List<Integer>> columns = new ArrayList<>();
-                    for (int i = 0; i < 5; i++) {
-                        List<Integer> pool = new ArrayList<>();
-                        for (int j = 1; j <= 15; j++) { pool.add(i * 15 + j); }
-                        Collections.shuffle(pool);
-                        columns.add(pool.subList(0, 5));
-                    }
-                    
-                    card = new ArrayList<>();
-                    for (int r = 0; r < 5; r++) {
-                        List<String> row = new ArrayList<>();
-                        for (int c = 0; c < 5; c++) {
-                            if (r == 2 && c == 2) { row.add("0"); }
-                            else { row.add(String.valueOf(columns.get(c).get(r))); }
-                        }
-                        card.add(row);
-                    }
-                    
-                    session.setAttribute("card", card);
-                    game.setPlayerCard(confirmedName, card);
-                } else {
-                    session.setAttribute("card", card);
-                }
-                
-                request.setAttribute("game", game);
-                request.setAttribute("confirmedPlayerName", confirmedName);
-                request.getRequestDispatcher("index.jsp").forward(request, response);
-            } else {
-                request.setAttribute("error", "⚠️ 部屋番号（ゲームID）が正しくありません。");
-                request.getRequestDispatcher("index.jsp").forward(request, response);
             }
-            return;
+
+            // 🔄 司会者がリセット（数字が0個）した場合は、古いカードを強制破棄
+            if (game.getDrawnNumbers().isEmpty()) {
+                session.removeAttribute("card");
+            }
+
+            // セッション、またはサーバーから現在のカードを取得
+            List<List<String>> card = (List<List<String>>) session.getAttribute("card");
+            if (card == null && confirmedName != null && !confirmedName.isEmpty()) {
+                card = game.getPlayerCard(confirmedName);
+            }
+            
+            // 🎲 カードが存在しない、またはリセット直後なら新カードをランダムに配り直す
+            if ((card == null || game.getDrawnNumbers().isEmpty()) && confirmedName != null && !confirmedName.isEmpty()) {
+                List<List<Integer>> columns = new ArrayList<>();
+                for (int i = 0; i < 5; i++) {
+                    List<Integer> pool = new ArrayList<>();
+                    for (int j = 1; j <= 15; j++) { pool.add(i * 15 + j); }
+                    Collections.shuffle(pool);
+                    columns.add(pool.subList(0, 5));
+                }
+                
+                card = new ArrayList<>();
+                for (int r = 0; r < 5; r++) {
+                    List<String> row = new ArrayList<>();
+                    for (int c = 0; c < 5; c++) {
+                        if (r == 2 && c == 2) { row.add("0"); }
+                        else { row.add(String.valueOf(columns.get(c).get(r))); }
+                    }
+                    row.add(null); // オリジナルの構造を100%完全再現（6要素目）
+                    card.add(row);
+                }
+                
+                session.setAttribute("card", card);
+                game.setPlayerCard(confirmedName, card);
+                
+                // 新カード配り直し時にもリーチ判定を全自動走査
+                game.checkAllPlayersStatus();
+            } else if (card != null) {
+                session.setAttribute("card", card);
+            }
         }
 
-        // 🔄 5. その他のアクセス（5秒自動更新の受け皿）
-        if (game != null && game.getDrawnNumbers().isEmpty()) {
-            // 司会者がリセットした瞬間、全プレイヤーのカード記憶を消去して新カードを促す
-            session.removeAttribute("card");
-        }
-
+        // 🚚 5. プレイヤー画面（index.jsp）へ安全に出荷
         request.setAttribute("game", game);
-        
-        if (confirmedName == null) {
-            confirmedName = request.getParameter("playerName");
-        }
         request.setAttribute("confirmedPlayerName", confirmedName);
         request.getRequestDispatcher("index.jsp").forward(request, response);
     }
