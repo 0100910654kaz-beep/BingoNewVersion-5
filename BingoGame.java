@@ -36,186 +36,148 @@ public class BingoGame implements Serializable {
         this.expireTime = cal.getTime();
     }
 
+    // 🔒【安全対策】一括クリア処理に鍵をかけ、リセット時のすれ違いを防ぐ
+    public synchronized void clearGameDataOnly() {
+        this.drawnNumbers.clear();
+        this.bingoPlayers.clear();
+        this.reachPlayers.clear();
+        this.playerCards.clear();
+        this.playerWaitNumbers.clear();
+        this.lastBingoTime = new Date();
+    }
+
     public synchronized String generateAnonymousName() {
-        this.anonymousCount++;
-        return "ゲスト" + this.anonymousCount;
+        anonymousCount++;
+        return "ゲスト" + anonymousCount;
     }
 
-    public void clearGameDataOnly() {
-        this.drawnNumbers.clear();       
-        this.bingoPlayers.clear();       
-        this.reachPlayers.clear();       
-        this.allPlayers.clear();         
-        this.playerCards.clear();        
-        this.playerWaitNumbers.clear();  
-        this.lastBingoTime = new Date(); 
-        this.anonymousCount = 0;
+    // 🔒【安全対策】カードの登録に鍵をかけ、計算中の書き換えによるバグを完全防止
+    public synchronized void setPlayerCard(String playerName, List<List<String>> card) {
+        if (playerName == null || playerName.isEmpty() || card == null) return;
+        playerCards.put(playerName, card);
     }
 
-    public int drawNumber() {
-        List<Integer> pool = new ArrayList<>();
-        for (int i = 1; i <= 75; i++) {
-            if (!drawnNumbers.contains(i)) {
-                pool.add(i);
-            }
-        }
-        if (pool.isEmpty()) return -1;
-        
-        java.util.Collections.shuffle(pool);
-        int nextNum = pool.get(0);
-        drawnNumbers.add(nextNum);
-        this.lastBingoTime = new Date(); 
-        
-        updateAllPlayersStatus();
-        return nextNum;
+    public synchronized List<List<String>> getPlayerCard(String playerName) {
+        if (playerName == null) return null;
+        return playerCards.get(playerName);
     }
 
-    // 👥 プレイヤー全員のビンゴ・リーチ状態を正しく更新する（完全ロック版）
-    public void updateAllPlayersStatus() {
-        // リーチはその都度変動するので毎回クリア
-        reachPlayers.clear();
-        
-        int currentDrawnNumber = drawnNumbers.isEmpty() ? -1 : drawnNumbers.get(drawnNumbers.size() - 1);
+    // 🔒【安全対策】全員のリーチ・ビンゴ判定計算に鍵をかけ、順番に確実に処理する
+    public synchronized void updateAllPlayersStatus() {
+        List<PlayerResult> currentBingo = new ArrayList<>();
+        List<PlayerResult> currentReach = new ArrayList<>();
+        ConcurrentHashMap<String, List<String>> newWaitNumbers = new ConcurrentHashMap<>();
 
-        for (String name : playerCards.keySet()) {
-            // 🚨【超重要】すでにビンゴ達成者一覧に名前がある人は、データ保護のため
-            // これ以降の判定（ビンゴ再登録やリーチ計算）を完全にスキップして、絶対に上書きさせない！
-            boolean alreadyBingo = false;
-            for (PlayerResult p : bingoPlayers) {
-                if (p.getPlayerName().equals(name)) {
-                    alreadyBingo = true;
-                    break;
-                }
-            }
-            if (alreadyBingo) {
-                continue; // 👈 このプレイヤーの処理は完全にスルーして次の人へ
-            }
-
+        for (String name : allPlayers) {
             List<List<String>> card = playerCards.get(name);
-            List<String> waits = calculateActualWaitNumbers(card);
-            playerWaitNumbers.put(name, waits);
+            if (card == null) continue;
 
-            // 1. 新しく1列揃った人を検知した場合
-            if (checkBingo(card)) {
-                addBingoPlayer(name, currentDrawnNumber);
-            } 
-            // 2. まだビンゴしていないが、リーチ状態の場合
-            else if (checkActualReachLines(card)) {
-                addReachPlayer(name);
-            }
-        }
-    }
+            boolean hasBingo = false;
+            boolean hasReach = false;
+            List<String> waitsForThisPlayer = new ArrayList<>();
 
-    private boolean checkBingo(List<List<String>> card) {
-        for (int i = 0; i < 5; i++) {
-            if (countHitInLine(card.get(i)) == 5) return true;
-        }
-        for (int c = 0; c < 5; c++) {
-            List<String> col = new ArrayList<>();
-            for (int r = 0; r < 5; r++) { col.add(card.get(r).get(c)); }
-            if (countHitInLine(col) == 5) return true;
-        }
-        List<String> d1 = new ArrayList<>();
-        List<String> d2 = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            d1.add(card.get(i).get(i));
-            d2.add(card.get(i).get(4 - i));
-        }
-        if (countHitInLine(d1) == 5) return true;
-        if (countHitInLine(d2) == 5) return true;
-        
-        return false;
-    }
-
-    private boolean checkActualReachLines(List<List<String>> card) {
-        for (int i = 0; i < 5; i++) {
-            if (countHitInLine(card.get(i)) == 4) return true;
-        }
-        for (int c = 0; c < 5; c++) {
-            List<String> col = new ArrayList<>();
-            for (int r = 0; r < 5; r++) { col.add(card.get(r).get(c)); }
-            if (countHitInLine(col) == 4) return true;
-        }
-        List<String> d1 = new ArrayList<>();
-        List<String> d2 = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            d1.add(card.get(i).get(i));
-            d2.add(card.get(i).get(4 - i));
-        }
-        if (countHitInLine(d1) == 4) return true;
-        if (countHitInLine(d2) == 4) return true;
-        
-        return false;
-    }
-
-    private int countHitInLine(List<String> line) {
-        int hit = 0;
-        for (String cell : line) {
-            if ("0".equals(cell) || drawnNumbers.contains(Integer.parseInt(cell))) {
-                hit++;
-            }
-        }
-        return hit;
-    }
-
-    private List<String> calculateActualWaitNumbers(List<List<String>> card) {
-        List<String> waits = new ArrayList<>();
-        for (int i = 0; i < 5; i++) { getWaitFromLine(card.get(i), waits); }
-        for (int c = 0; c < 5; c++) {
-            List<String> col = new ArrayList<>();
-            for (int r = 0; r < 5; r++) { col.add(card.get(r).get(c)); }
-            getWaitFromLine(col, waits);
-        }
-        List<String> d1 = new ArrayList<>();
-        List<String> d2 = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            d1.add(card.get(i).get(i));
-            d2.add(card.get(i).get(4 - i));
-        }
-        getWaitFromLine(d1, waits);
-        getWaitFromLine(d2, waits);
-
-        return waits;
-    }
-
-    private void getWaitFromLine(List<String> line, List<String> waits) {
-        if (countHitInLine(line) == 4) {
-            for (String cell : line) {
-                if (!"0".equals(cell) && !drawnNumbers.contains(Integer.parseInt(cell))) {
-                    if (!waits.contains(cell)) {
-                        waits.add(cell);
+            // 横ラインチェック
+            for (int r = 0; r < 5; r++) {
+                int missCount = 0;
+                String lastMissNum = "";
+                for (int c = 0; c < 5; c++) {
+                    String num = card.get(r).get(c);
+                    if (num.equals("0")) continue;
+                    if (!drawnNumbers.contains(Integer.parseInt(num))) {
+                        missCount++;
+                        lastMissNum = num;
                     }
                 }
+                if (missCount == 0) hasBingo = true;
+                if (missCount == 1) { hasReach = true; if (!waitsForThisPlayer.contains(lastMissNum)) waitsForThisPlayer.add(lastMissNum); }
+            }
+
+            // 縦ラインチェック
+            for (int c = 0; c < 5; c++) {
+                int missCount = 0;
+                String lastMissNum = "";
+                for (int r = 0; r < 5; r++) {
+                    String num = card.get(r).get(c);
+                    if (num.equals("0")) continue;
+                    if (!drawnNumbers.contains(Integer.parseInt(num))) {
+                        missCount++;
+                        lastMissNum = num;
+                    }
+                }
+                if (missCount == 0) hasBingo = true;
+                if (missCount == 1) { hasReach = true; if (!waitsForThisPlayer.contains(lastMissNum)) waitsForThisPlayer.add(lastMissNum); }
+            }
+
+            // ななめ（左上から右下）
+            {
+                int missCount = 0;
+                String lastMissNum = "";
+                for (int i = 0; i < 5; i++) {
+                    String num = card.get(i).get(i);
+                    if (num.equals("0")) continue;
+                    if (!drawnNumbers.contains(Integer.parseInt(num))) {
+                        missCount++;
+                        lastMissNum = num;
+                    }
+                }
+                if (missCount == 0) hasBingo = true;
+                if (missCount == 1) { hasReach = true; if (!waitsForThisPlayer.contains(lastMissNum)) waitsForThisPlayer.add(lastMissNum); }
+            }
+
+            // ななめ（右上から左下）
+            {
+                int missCount = 0;
+                String lastMissNum = "";
+                for (int i = 0; i < 5; i++) {
+                    String num = card.get(i).get(4 - i);
+                    if (num.equals("0")) continue;
+                    if (!drawnNumbers.contains(Integer.parseInt(num))) {
+                        missCount++;
+                        lastMissNum = num;
+                    }
+                }
+                if (missCount == 0) hasBingo = true;
+                if (missCount == 1) { hasReach = true; if (!waitsForThisPlayer.contains(lastMissNum)) waitsForThisPlayer.add(lastMissNum); }
+            }
+
+            if (hasBingo) {
+                int lastNum = drawnNumbers.isEmpty() ? 0 : drawnNumbers.get(drawnNumbers.size() - 1);
+                currentBingo.add(new PlayerResult(name, new Date(), lastNum));
+            } else if (hasReach) {
+                currentReach.add(new PlayerResult(name, new Date(), 0));
+                newWaitNumbers.put(name, waitsForThisPlayer);
             }
         }
-    }
 
-    private void addBingoPlayer(String name, int currentDrawnNumber) {
-        // 安全策として、ここでも既存プレイヤーの重複を絶対にブロック
-        for (PlayerResult p : bingoPlayers) {
-            if (p.getPlayerName().equals(name)) return;
+        // ビンゴリストの更新（新しくビンゴした人を先頭にする）
+        for (PlayerResult newB : currentBingo) {
+            boolean exists = false;
+            for (PlayerResult oldB : bingoPlayers) {
+                if (oldB.getPlayerName().equals(newB.getPlayerName())) { exists = true; break; }
+            }
+            if (!exists) {
+                bingoPlayers.add(0, newB);
+                lastBingoTime = new Date();
+            }
         }
-        Date now = new Date();
-        bingoPlayers.add(0, new PlayerResult(name, now, currentDrawnNumber));
-        this.lastBingoTime = now; 
-        removeReachPlayer(name);
-    }
 
-    private void addReachPlayer(String name) {
-        for (PlayerResult p : reachPlayers) {
-            if (p.getPlayerName().equals(name)) return;
+        // リーチリストの更新
+        reachPlayers.clear();
+        for (PlayerResult newR : currentReach) {
+            boolean inBingo = false;
+            for (PlayerResult b : bingoPlayers) {
+                if (b.getPlayerName().equals(newR.getPlayerName())) { inBingo = true; break; }
+            }
+            if (!inBingo) {
+                reachPlayers.add(newR);
+            }
         }
-        for (PlayerResult p : bingoPlayers) {
-            if (p.getPlayerName().equals(name)) return;
-        }
-        reachPlayers.add(0, new PlayerResult(name, new Date(), 0));
+
+        playerWaitNumbers.clear();
+        playerWaitNumbers.putAll(newWaitNumbers);
     }
 
-    public void removeReachPlayer(String name) {
-        reachPlayers.removeIf(p -> p.getPlayerName().equals(name));
-    }
-
-    public List<String> getWaitNumbers(String name) {
+    public synchronized List<String> getWaitNumbers(String name) {
         return playerWaitNumbers.getOrDefault(name, new ArrayList<>());
     }
 
@@ -234,9 +196,4 @@ public class BingoGame implements Serializable {
     public List<PlayerResult> getReachPlayers() { return reachPlayers; }
     public int getPlayerCount() { return playerCards.size(); }
     public List<String> getAllPlayers() { return allPlayers; }
-
-    public void setPlayerCard(String playerName, List<List<String>> card) {
-        playerCards.put(playerName, card);
-        updateAllPlayersStatus(); 
-    }
 }
