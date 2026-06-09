@@ -47,16 +47,15 @@
     <script>
         // 5秒ごとに自動リロードして最新の参加状況やビンゴ者一覧を取得
         setInterval(function() {
-            // ⚡【ここを修正：目視確認ロジック】
-            // 画面内に「日数を入力する欄（validDaysInput）」が見えているということは、
-            // まだ部屋が作られていない初期リセット状態ですので、5秒タイマーの処理を100%停止（キャンセル）します！
+            // ⚡【重要】画面内に「有効日数の入力欄(validDaysInput)」が存在している間は、
+            // まだ部屋を作成していない初期画面ですので、5秒タイマーの自動リロード処理を完全に停止します！
             var daysInput = document.getElementById("validDaysInput");
-            if (daysInput && daysInput.type !== "hidden") {
+            if (daysInput) {
                 return; 
             }
 
-            var daysVal = daysInput ? daysInput.value : "<%= currentValidDays %>";
-            window.location.href = "BingoServlet?userType=admin&validDays=" + daysVal;
+            // 部屋作成後は、ここを通って5秒ごとにリアルタイム更新されます
+            window.location.href = "BingoServlet?userType=admin";
         }, 5000);
     </script>
 </head>
@@ -70,26 +69,18 @@
         <span style="font-size: 14px; color: #6c757d; margin-left: 15px;">(現在の参加者数: <%= (game != null) ? game.getPlayerCount() : 0 %> 人)</span>
     </div>
 
-    <% if (game == null || "まだ開始していません".equals(gameId) || game.getDrawnNumbers().isEmpty() && game.getAllPlayers().isEmpty()) { 
-        // 💡 確実に「まだ始まっていない画面」を判定するためのJSPセーフティロック
-    %>
-        <% if (game == null || "まだ開始していません".equals(gameId)) { %>
-            <div class="panel" style="text-align: center; margin-bottom: 20px; background: #fff5f5;">
-                <p style="font-weight: bold; color: #c92a2a; margin-top: 0;">ビンゴゲームの部屋がまだ作成されていません。</p>
-                <form action="BingoServlet" method="get">
-                    <input type="hidden" name="userType" value="admin">
-                    <input type="hidden" name="action" value="create">
-                    <label style="font-weight: bold;">部屋の有効日数: </label>
-                    <input type="number" id="validDaysInput" name="validDays" value="<%= currentValidDays %>" style="width:60px; padding:5px; text-align:center; font-size:16px;" min="1" required> 日間
-                    <br><br>
-                    <button type="submit" class="btn btn-draw" style="background:#228be6;">新規に部屋を作成する</button>
-                </form>
-            </div>
-        <% } else { %>
-            <input type="text" id="validDaysInput" value="<%= currentValidDays %>" style="display:none;">
-        <% } %>
-    <% } else { %>
-        <input type="hidden" id="validDaysInput" value="<%= currentValidDays %>">
+    <% if (game == null || "まだ開始していません".equals(gameId)) { %>
+        <div class="panel" style="text-align: center; margin-bottom: 20px; background: #fff5f5;">
+            <p style="font-weight: bold; color: #c92a2a; margin-top: 0;">ビンゴゲームの部屋がまだ作成されていません。</p>
+            <form action="BingoServlet" method="get">
+                <input type="hidden" name="userType" value="admin">
+                <input type="hidden" name="action" value="create">
+                <label style="font-weight: bold;">部屋の有効日数: </label>
+                <input type="number" id="validDaysInput" name="validDays" value="<%= currentValidDays %>" style="width:60px; padding:5px; text-align:center; font-size:16px;" min="1" required> 日間
+                <br><br>
+                <button type="submit" class="btn btn-draw" style="background:#228be6;">新規に部屋を作成する</button>
+            </form>
+        </div>
     <% } %>
 
     <% if (game != null && !"まだ開始していません".equals(gameId)) { %>
