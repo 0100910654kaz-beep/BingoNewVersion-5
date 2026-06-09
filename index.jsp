@@ -15,14 +15,14 @@
     }
     if (playerName == null) { playerName = ""; }
 
-    // 🔄【重要】司会者がリセット（数字が0個）したら、古いカードを強制消去
+    // ⚡【重要・カード切り替えの鍵】司会者がリセット（数字が0個）したら、古いカードを即座に破棄！
     if (game != null && game.getDrawnNumbers().isEmpty()) {
         session.removeAttribute("card");
     }
 
     List<List<String>> bingoCard = (List<List<String>>) session.getAttribute("card");
 
-    // 🎲 カードが消えていたら（リセット直後など）、今の名前のまま自動で新しいカードをランダム生成
+    // 🎲 カードが破棄されて空っぽになったら、名前を維持したまま、新しいランダムカードを全自動で再生成！
     if (bingoCard == null && game != null && !playerName.isEmpty()) {
         List<List<Integer>> columns = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
@@ -31,6 +31,7 @@
             Collections.shuffle(pool);
             columns.add(pool.subList(0, 5));
         }
+        
         bingoCard = new ArrayList<>();
         for (int r = 0; r < 5; r++) {
             List<String> row = new ArrayList<>();
@@ -41,8 +42,8 @@
             bingoCard.add(row);
         }
         session.setAttribute("card", bingoCard);
-        game.setPlayerCard(playerName, bingoCard); // ⚡ サーバー側にも即座に新カードを同期して登録
-        game.checkAllPlayersStatus();              // ⚡ リーチ判定を即座に再計算
+        game.setPlayerCard(playerName, bingoCard); // ⚡ サーバー側（窓口）にも新しいカードを登録
+        game.updateAllPlayersStatus();             // ⚡ リーチ判定を即座に連動計算
     }
 
     List<Integer> reverseDrawnNumbers = new ArrayList<>();
@@ -95,7 +96,6 @@
         .history-cell.newest { animation: pulse 1s infinite alternate; font-size: 14px; }
         @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.1); } }
         
-        /* 🎉 ビンゴ・リーチお祝いアニメーション */
         .overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); color:white; display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:9999; }
         .firework { font-size: 80px; animation: bounce 0.6s infinite alternate; }
         @keyframes bounce { from { transform: scale(1); } to { transform: scale(1.2); } }
