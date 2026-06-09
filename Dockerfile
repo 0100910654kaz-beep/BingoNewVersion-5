@@ -24,9 +24,9 @@ RUN find . -name "*.java" | xargs javac -classpath "/usr/local/tomcat/lib/*" -d 
 RUN sed -i 's/<Context>/<Context sessionCookiePathUsesTrailingSlash="false">/' /usr/local/tomcat/conf/context.xml
 
 # =========================================================================
-# 🛠️ 【Renderの数秒後の暴走を止める最重要設定】
-# Tomcatの標準ポートを、Renderの指定ポート（8080）で起動時に強制上書きします。
-# これにより、Renderが迷子にならず、数秒後に別サーバーへ飛ばされる現象を防ぎます。
+# 🛠️ 【超重要：Render暴走・部屋同期バグを根絶する最終修正】
+# 1. Tomcatのシャットダウンポートを「-1（無効）」にし、Renderの誤アクセスによるパニックを防ぎます。
+# 2. Webポート（8080）をRenderの環境変数で確実に上書き固定します。
 # =========================================================================
 EXPOSE 8080
-CMD ["sh", "-c", "sed -i \"s/port=\\\"8080\\\"/port=\\\"${PORT:-8080}\\\"/g\" /usr/local/tomcat/conf/server.xml && catalina.sh run"]
+CMD ["sh", "-c", "sed -i 's/port=\"8005\" shutdown=\"SHUTDOWN\"/port=\"-1\" shutdown=\"SHUTDOWN\"/g' /usr/local/tomcat/conf/server.xml && sed -i \"s/port=\\\"8080\\\"/port=\\\"${PORT:-8080}\\\"/g\" /usr/local/tomcat/conf/server.xml && catalina.sh run"]
