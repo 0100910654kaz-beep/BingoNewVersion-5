@@ -24,6 +24,16 @@
 
         String confirmedName = (String) session.getAttribute("myConfirmedName");
         
+        // 🌟【★超重要・追加ロジック】Renderがセッションを切断した際の自動救済
+        // セッションから名前が消えていても、URLやリフレッシュのパラメータに名前が残っていれば執念深く復旧する！
+        if (confirmedName == null || confirmedName.isEmpty()) {
+            confirmedName = request.getParameter("playerName");
+            if (confirmedName != null && !confirmedName.trim().isEmpty()) {
+                confirmedName = confirmedName.trim();
+                session.setAttribute("myConfirmedName", confirmedName); // セッションに再保存
+            }
+        }
+        
         // 【参加処理】
         if ("join".equals(action)) {
             String inputGameId = request.getParameter("gameId");
@@ -85,13 +95,28 @@
             session.removeAttribute("card");
         }
 
-        // カードの同期
+        // 🌟【カードの同期とRender切断対策】
         @SuppressWarnings("unchecked")
         List<List<String>> card = (List<List<String>>) session.getAttribute("card");
+        
+        // もしRenderにセッション（カード）を消されてしまっていたら、サーバー側（currentGame）から自分のカードを執念深く回収する
+        if (card == null && confirmedName != null && !confirmedName.isEmpty()) {
+            card = currentGame.getPlayerCard(confirmedName); // 👈 共通メモリから回収！
+            if (card != null) {
+                session.setAttribute("card", card); // セッションに復活させる
+            }
+        }
+        
+        // 逆にセッションにカードがあって、サーバー側に未登録なら同期する
         if (card != null && confirmedName != null && !confirmedName.isEmpty()) {
             currentGame.setPlayerCard(confirmedName, card);
         }
 
+        // 最終的な安全チェック：もし名前がない状態ならindex.jsp側でバグるので、リクエストパラメータから最終補填
+        if (confirmedName == null) {
+            confirmedName = request.getParameter("playerName");
+        }
+        
         request.setAttribute("game", currentGame);
         request.setAttribute("confirmedPlayerName", confirmedName);
         request.getRequestDispatcher("index.jsp").forward(request, response);
