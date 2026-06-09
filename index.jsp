@@ -15,15 +15,16 @@
     }
     if (playerName == null) { playerName = ""; }
 
-    // ⚡ 司会者がリセット（数字が0個）したら、カードと名前の記憶を完全に全消去してトップへ戻す！
+    // ⚡【最優先リセット】司会者がリセット（数字が0個）したら、サーブレットの自動回収を完全に遮断してトップへ戻す！
     if (game != null && game.getDrawnNumbers().isEmpty()) {
         session.removeAttribute("card");
         session.removeAttribute("myConfirmedName");
-        playerName = ""; 
+        playerName = ""; // 名前も完全に空にする
     }
 
     List<List<String>> bingoCard = (List<List<String>>) session.getAttribute("card");
 
+    // 🎲 カードがなく、かつプレイヤー名が完全に存在する場合のみ自動生成・救済を行う
     if (bingoCard == null && game != null && !playerName.isEmpty()) {
         List<List<Integer>> columns = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
