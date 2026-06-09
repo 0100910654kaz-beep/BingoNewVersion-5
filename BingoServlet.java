@@ -79,11 +79,11 @@ public class BingoServlet extends HttpServlet {
                         int drawn = pool.get(0);
                         game.getDrawnNumbers().add(drawn);
                         
-                        // ⚡ サーバー側の安全な新しい更新メソッドに修正
+                        // サーバー側の安全な新しい更新メソッド
                         game.updateAllPlayersStatus();
                     }
                 } else if ("reset".equals(action)) {
-                    // ⚡【確実なリセット】サーバー側の全データ（古いカードやリーチ状態）を完全に一括クリア
+                    // サーバー側の全データを一括クリア
                     game.clearGameDataOnly();
                 }
             }
@@ -125,7 +125,9 @@ public class BingoServlet extends HttpServlet {
                 }
             }
 
-            // 🔄 司会者がリセット（数字が0個）した場合は、古いカードをセッションから即時破棄
+            // 🔄【ここが最重要修正！】
+            // 自動更新（actionが空）の時であっても、司会者がリセット（数字が0個）したなら
+            // プレイヤー全員の古いカード記憶（セッション）を確実にその場で破棄します！
             if (game.getDrawnNumbers().isEmpty()) {
                 session.removeAttribute("card");
             }
@@ -138,6 +140,9 @@ public class BingoServlet extends HttpServlet {
         }
 
         // 🚚 5. プレイヤー画面（index.jsp）に必要なオブジェクトを載せてフォワード
+        if (confirmedName == null) {
+            confirmedName = request.getParameter("playerName");
+        }
         request.setAttribute("game", game);
         request.setAttribute("confirmedPlayerName", confirmedName);
         request.getRequestDispatcher("index.jsp").forward(request, response);
