@@ -82,9 +82,9 @@ public class BingoServlet extends HttpServlet {
                 game = null;
             }
 
-            // ⚡【真のバグ修正！】
-            // 5秒ごとの自動更新（actionが空）でアクセスしてきた場合も含め、
-            // 司会者(admin)からのアクセスであれば、確実に「admin.jsp」へフォワードさせます。
+            // ⚡【重要修正】
+            // 司会者(admin)からのアクセスであれば、自動リロード（actionが空）の時であっても、
+            // 確実に「admin.jsp」へゲーム状態を載せてフォワードさせます。
             request.setAttribute("game", game);
             request.getRequestDispatcher("admin.jsp").forward(request, response);
             return;
@@ -125,7 +125,7 @@ public class BingoServlet extends HttpServlet {
             session.removeAttribute("card");
         }
 
-        // ⚡ 現在の有効なカードをセッションから取得してサーバー側（BingoGame）に再同期
+        // ⚡ 現在の有効なカードをセッションから取得してサーバー側に再同期
         List<List<String>> card = (List<List<String>>) session.getAttribute("card");
         if (card != null && confirmedName != null && !confirmedName.isEmpty() && game != null) {
             game.setPlayerCard(confirmedName, card);
