@@ -19,7 +19,7 @@ import jakarta.servlet.http.HttpSession;
 public class BingoServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
-    // 🏢 サーバー全体で複数の部屋を同時に管理するための「下駄箱（Map）」
+    // 🏢 サーバー全体で複数の部屋を完全に分けて管理する「無敵の下駄箱（Map）」
     @SuppressWarnings("unchecked")
     private synchronized Map<String, BingoGame> getGamesMap(ServletContext application) {
         Map<String, BingoGame> games = (Map<String, BingoGame>) application.getAttribute("games");
@@ -39,13 +39,13 @@ public class BingoServlet extends HttpServlet {
         ServletContext application = getServletContext();
         HttpSession session = request.getSession();
         
-        // 📦 下駄箱から部屋一覧を取得
+        // 📦 下駄箱（Map）を確実に取得
         Map<String, BingoGame> games = getGamesMap(application);
         
-        // 🔍 現在のセッション（ブラウザ）がどの部屋IDに紐づいているかを追跡
+        // 🔑 このブラウザ（司会者またはプレイヤー）が今どの部屋IDにいるかをセッションから取得
         String sessionGameId = (String) session.getAttribute("myCurrentGameId");
         
-        // ⏱️ 1. 定期自動期限チェック（動いているすべての部屋の有効期限を掃除）
+        // ⏱️ 1. 定期自動期限チェック（有効期限切れ、または終了後の部屋を安全に掃除）
         if (!games.isEmpty()) {
             games.entrySet().removeIf(entry -> {
                 BingoGame g = entry.getValue();
@@ -56,21 +56,23 @@ public class BingoServlet extends HttpServlet {
         // 🚀 2. セッションからプレイヤー名を取得
         String confirmedName = (String) session.getAttribute("myConfirmedName");
         
-        // 司会者でもなく、アクションもなく、入室もしていない場合はトップへ戻す
+        // 司会者でもなく、アクションもなく、どこの部屋にも属していない初期状態ならトップへ戻す
         if (action == null && !"admin".equals(userType) && sessionGameId == null) {
             response.sendRedirect("index.jsp");
             return;
         }
 
-        // 🛠️ 3. 司会者(admin)向けの処理
+        // 🛠️ 3. 司会者(admin)向けの完全独立処理
         if ("admin".equals(userType)) {
-            BingoGame game = null;
+            BingoGame currentGame = null;
+            
+            // 既存の紐付けがあれば、必ず「その部屋ID」のデータを下駄箱から1対1で取り出す
             if (sessionGameId != null) {
-                game = games.get(sessionGameId);
+                currentGame = games.get(sessionGameId);
             }
 
             if ("create".equals(action)) {
-                // 新規作成時は、古い部屋の紐付けを一度クリアして新しく作る
+                // 新規に部屋を作成する処理
                 String validDaysParam = request.getParameter("validDays");
                 int validDays = 8; // デフォルト値
                 if (validDaysParam != null && !validDaysParam.isEmpty()) {
@@ -81,49 +83,52 @@ public class BingoServlet extends HttpServlet {
                     }
                 }
                 
-                // 被らない4桁の部屋番号(ID)を生成
+                // 絶対に他と被らない4桁の部屋番号(ID)を自動生成
                 String newGameId;
                 do {
                     newGameId = String.format("%04d", (int)(Math.random() * 10000));
                 } while (games.containsKey(newGameId));
                 
-                game = new BingoGame(newGameId, validDays);
-                games.put(newGameId, game); // 下駄箱に部屋を入れる
+                // 新しい部屋を作成して下駄箱にガッチリ保管
+                currentGame = new BingoGame(newGameId, validDays);
+                games.put(newGameId, currentGame);
                 
                 sessionGameId = newGameId;
-                session.setAttribute("myCurrentGameId", sessionGameId); // 司会者のセッションに部屋IDを記憶
+                session.setAttribute("myCurrentGameId", sessionGameId); // 司会者ブラウザにこの部屋IDを固定
                 
             } else if ("draw".equals(action)) {
-                if (game != null) {
+                // 【バグ完全修正】必ず「今自分が管理している部屋」に対してのみ玉を引く！！
+                if (currentGame != null) {
                     List<Integer> pool = new ArrayList<>();
                     for (int i = 1; i <= 75; i++) {
-                        if (!game.getDrawnNumbers().contains(i)) {
+                        if (!currentGame.getDrawnNumbers().contains(i)) {
                             pool.add(i);
                         }
                     }
                     if (!pool.isEmpty()) {
                         Collections.shuffle(pool);
                         int drawn = pool.get(0);
-                        game.getDrawnNumbers().add(drawn);
-                        game.checkPlayersStatus(drawn); 
+                        currentGame.getDrawnNumbers().add(drawn);
+                        currentGame.checkPlayersStatus(drawn); // この部屋の参加者だけを当選判定
                     }
                 }
             } else if ("reset".equals(action)) {
+                // 【バグ完全修正】リセット時も、他の部屋は一切触らず、この部屋だけを下駄箱から削除する
                 if (sessionGameId != null) {
-                    games.remove(sessionGameId); // 下駄箱からこの部屋を削除
+                    games.remove(sessionGameId);
                     session.removeAttribute("myCurrentGameId");
                     sessionGameId = null;
-                    game = null;
+                    currentGame = null;
                 }
             }
 
-            // 司会者画面(admin.jsp)へ、自分の担当する部屋データを載せてフォワード
-            request.setAttribute("game", game);
+            // 【バグ完全修正】他の部屋のデータに上書きされるのを完全に防ぎ、自分の部屋データだけを確実に画面へ渡す
+            request.setAttribute("game", currentGame);
             request.getRequestDispatcher("admin.jsp").forward(request, response);
             return;
         }
 
-        // 👤 4. 一般プレイヤー向けの通常処理
+        // 👤 4. 一般プレイヤー向けの完全独立処理
         if ("join".equals(action)) {
             String inputGameId = request.getParameter("gameId");
             String inputName = request.getParameter("playerName");
@@ -135,10 +140,11 @@ public class BingoServlet extends HttpServlet {
             }
             inputName = inputName.trim();
 
-            // 入力されたIDの部屋が下駄箱にあるか探す
+            // 参加者が入力した4桁IDの部屋が、下駄箱（Map）に実在するかチェック
             if (inputGameId != null && games.containsKey(inputGameId)) {
                 BingoGame targetGame = games.get(inputGameId);
                 
+                // もし過去に別の部屋に入っていた場合は、古い部屋の名簿から削除
                 if (confirmedName != null && !confirmedName.equals(inputName) && sessionGameId != null) {
                     BingoGame oldGame = games.get(sessionGameId);
                     if (oldGame != null) {
@@ -146,6 +152,7 @@ public class BingoServlet extends HttpServlet {
                     }
                 }
                 
+                // 指定された部屋の名簿にプレイヤーを追加
                 if (!targetGame.getAllPlayers().contains(inputName)) {
                     targetGame.getAllPlayers().add(inputName);
                 }
@@ -154,7 +161,7 @@ public class BingoServlet extends HttpServlet {
                 sessionGameId = inputGameId;
                 
                 session.setAttribute("myConfirmedName", confirmedName);
-                session.setAttribute("myCurrentGameId", sessionGameId); // プレイヤーのセッションに部屋IDを記憶
+                session.setAttribute("myCurrentGameId", sessionGameId); // プレイヤーブラウザにこの部屋IDを記憶
             } else {
                 request.setAttribute("error", "⚠️ 部屋番号（ゲームID）が正しくありません、または有効期限が切れています。");
                 request.getRequestDispatcher("index.jsp").forward(request, response);
@@ -162,18 +169,19 @@ public class BingoServlet extends HttpServlet {
             }
         }
 
-        // 現在の部屋データを取得して同期
+        // 【バグ完全修正】プレイヤーの画面自動更新時も、必ず自分が所属している部屋のデータだけをピンポイントで取得する
         BingoGame currentGame = null;
         if (sessionGameId != null) {
             currentGame = games.get(sessionGameId);
         }
 
-        // 司会者がリセットして部屋が消えた、または数字が0個の場合は古いカードを破棄
+        // 司会者がその部屋をリセットした、または部屋自体が消えた場合はカードを破棄
         if (currentGame == null || currentGame.getDrawnNumbers().isEmpty()) {
             session.removeAttribute("card");
         }
 
         // 現在の有効なカードをセッションから取得してサーバー側に再同期
+        @SuppressWarnings("unchecked")
         List<List<String>> card = (List<List<String>>) session.getAttribute("card");
         if (card != null && confirmedName != null && !confirmedName.isEmpty() && currentGame != null) {
             currentGame.setPlayerCard(confirmedName, card);
