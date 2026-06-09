@@ -42,15 +42,16 @@
     <script>
         // 5秒ごとに自動リロードして最新の参加状況やビンゴ者一覧を取得するタイマー
         setInterval(function() {
-            // ⚡ 画面内に部屋作成用の入力欄(id="validDaysInput")がある＝まだ部屋を作っていない初期状態
-            // この時は、大山さんが日数を変更している最中なので、5秒タイマーの自動更新リロードを完全にストップします！
             var daysInput = document.getElementById("validDaysInput");
             if (daysInput) {
-                return; // 自動リロードを完全に阻止
+                return; // まだ部屋を作っていない初期状態の時は自動リロードを完全に阻止
             }
 
-            // 部屋が作成された後は、ここを通って5秒ごとに安全にリアルタイム更新されます
-            window.location.href = "BingoServlet?userType=admin";
+            // ⚡【会場混ざりバグの完全修正壁】
+            // リロードするURLの末尾に、今画面に表示されている「自分自身の4桁の部屋番号」を確実に付与します。
+            // これにより、5秒リロードが走っても他の会場のデータに乗っ取られるのを100%防ぎます！
+            var currentGameId = "<%= gameId %>";
+            window.location.href = "BingoServlet?userType=admin&gameId=" + currentGameId;
         }, 5000);
     </script>
 </head>
@@ -115,7 +116,7 @@
 
         <div class="grid-container">
             <div class="panel">
-                <h3>👥 参加中のプレイヤー名簿 (<%= game.getAllPlayers().size() %>人)</h3>
+                <h3>👥 参加中のプレイヤー名の名簿 (<%= game.getAllPlayers().size() %>人)</h3>
                 <div style="max-height: 300px; overflow-y: auto;">
                     <ul>
                         <% for (String name : game.getAllPlayers()) { %>
@@ -140,11 +141,11 @@
                         <li><strong><%= currentRank %>位</strong>: <%= p.getPlayerName() %> さん <span style="color:#e63946; font-weight:bold;">(🔑<%= p.getDrawnNumberAtBingo() %>番でビンゴ!)</span></li>
                     <% 
                        } 
-                       if (bingoList.isEmpty()) { %> <p style="color:#888;">まだビンゴした人はいません</p> <% } 
+                       if (bingoList.isEmpty()) { %> <p style="color:#888;">まだビンゴした人はいません</p> <% } \
                     %>
                 </ul>
 
-                <h3 style="margin-top: 25px;">🔥 リーチの人（全全自動検知）</h3>
+                <h3 style="margin-top: 25px;">🔥 リーチの人（全自動検知）</h3>
                 <ul>
                     <% for (PlayerResult p : game.getReachPlayers()) { %>
                         <li><strong><%= p.getPlayerName() %> さん</strong> <span style="color: #ff9800; font-size: 14px; font-weight: bold;">（あと <%= game.getWaitNumbers(p.getPlayerName()) %> 番でビンゴ！）</span></li>
