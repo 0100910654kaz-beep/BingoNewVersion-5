@@ -16,11 +16,9 @@
         Collections.reverse(reverseDrawnNumbers);
     }
 
-    // ⏱️【重要】すでにゲームが作られている場合は、初期表示の「8」ではなく、
-    // 現在の有効期限から逆算するか、司会者が入力したリクエスト値をそのまま維持させます。
     String currentValidDays = request.getParameter("validDays");
     if (currentValidDays == null || currentValidDays.isEmpty()) {
-        currentValidDays = "8"; // まだ何も入力されていない最初の初期値
+        currentValidDays = "8"; // 最初の初期値
     }
 %>
 <!DOCTYPE html>
@@ -47,13 +45,14 @@
         li { margin-bottom: 8px; font-size: 15px; }
     </style>
     <script>
-        // 5秒ごとに自動リロードして最新の参加状況やビンゴ者一覧を取得
-        setInterval(function() {
-            // 入力フォームに今ユーザーが打ち込んでいる日数を消さないよう、URLに載せてリロードします
-            var daysInput = document.getElementById("validDaysInput");
-            var daysVal = daysInput ? daysInput.value : "<%= currentValidDays %>";
-            window.location.href = "BingoServlet?userType=admin&validDays=" + daysVal;
-        }, 5000);
+        // ⚡【修正】部屋が実際に作られている（gameIdが有効）ときだけ、5秒の自動リロードを起動します
+        <% if (game != null && !"まだ開始していません".equals(gameId)) { %>
+            setInterval(function() {
+                var daysInput = document.getElementById("validDaysInput");
+                var daysVal = daysInput ? daysInput.value : "<%= currentValidDays %>";
+                window.location.href = "BingoServlet?userType=admin&validDays=" + daysVal;
+            }, 5000);
+        <% } %>
     </script>
 </head>
 <body>
@@ -125,14 +124,14 @@
                         <% for (String name : game.getAllPlayers()) { %>
                             <li>• <%= name %></li>
                         <% } 
-                           if (game.getAllPlayers().isEmpty()) { %> <p style=\"color:#888;\">まだ誰も参加していません</p> <% } %>
+                           if (game.getAllPlayers().isEmpty()) { %> <p style="color:#888;">まだ誰も参加していません</p> <% } %>
                     </ul>
                 </div>
             </div>
 
             <div class="panel">
                 <h3>🏆 ビンゴ達成者一覧</h3>
-                <ul id=\"bingoList\">
+                <ul id="bingoList">
                     <% 
                        List<PlayerResult> bingoList = game.getBingoPlayers();
                        int totalCount = bingoList.size();
