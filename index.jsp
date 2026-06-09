@@ -15,7 +15,7 @@
     }
     if (playerName == null) { playerName = ""; }
 
-    // ⚡【鉄則】司会者がリセット（数字が0個）したら、カードと名前の記憶を完全に全消去してトップへ戻す！
+    // ⚡ 司会者がリセット（数字が0個）したら、カードと名前の記憶を完全に全消去してトップへ戻す！
     if (game != null && game.getDrawnNumbers().isEmpty()) {
         session.removeAttribute("card");
         session.removeAttribute("myConfirmedName");
@@ -24,7 +24,6 @@
 
     List<List<String>> bingoCard = (List<List<String>>) session.getAttribute("card");
 
-    // 🎲 カードがなく、かつ名前がしっかりと保持されている場合のみ自動救済・カード生成を行う
     if (bingoCard == null && game != null && !playerName.isEmpty()) {
         List<List<Integer>> columns = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
@@ -142,7 +141,8 @@
                         <div class="history-cell newest" style="background:#ff6b6b; color:white;"><%= num %></div>
                     <% } else { %>
                         <div class="history-cell"><%= num %></div>
-                    <% }\n                } %>
+                    <% }
+                } %>
             </div>
         </div>
     <% } %>
