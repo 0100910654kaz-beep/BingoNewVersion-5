@@ -17,7 +17,7 @@ import jakarta.servlet.http.HttpSession;
 public class BingoServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
-    // 全てのビンゴ部屋を管理する共通メモリスペース（サーバー起動中、永続保持）
+    // 全てのビンゴ部屋を管理する共通メモリスペース
     private static final ConcurrentHashMap<String, BingoGame> games = new ConcurrentHashMap<>();
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) 
@@ -98,9 +98,8 @@ public class BingoServlet extends HttpServlet {
         }
 
         // =================================================================
-        // 👤 2. 一般プレイヤー向けの処理（重複回避ロジックを最優先に強化）
+        // 👤 2. 一般プレイヤー向けの処理
         // =================================================================
-        
         String targetGameId = request.getParameter("gameId");
         if (targetGameId == null || targetGameId.isEmpty()) {
             targetGameId = (String) session.getAttribute("myCurrentGameId");
@@ -124,7 +123,7 @@ public class BingoServlet extends HttpServlet {
             return;
         }
 
-        // 司会者がリセットして数字が0個の場合は古いカードを破棄
+        // 司会者がリセットして数字が0個の場合は古い状態を完全クリア
         if (currentGame.getDrawnNumbers().isEmpty()) {
             session.removeAttribute("card");
             session.removeAttribute("myConfirmedName");
@@ -132,7 +131,7 @@ public class BingoServlet extends HttpServlet {
 
         String confirmedName = (String) session.getAttribute("myConfirmedName");
 
-        // 🚪 【参加ボタン（join）を押した時の処理】ここを最優先かつ厳格に判定！
+        // 🚪 【部屋に入る（join）ボタンを押した瞬間の割り振り】
         if ("join".equals(action)) {
             String inputName = request.getParameter("playerName");
             if (inputName != null) {
@@ -145,28 +144,26 @@ public class BingoServlet extends HttpServlet {
                 return;
             }
 
-            // 新しくボタンを押して入ってきた場合、現在のセッション情報に関わらず名前の重複チェックをかける
             String uniqueName = inputName;
             
-            // サーバーの共通メモリにすでにその名前が存在するかを厳格にチェック
+            // サーバーの共通メモリ上に、既に全く同じ名前のカードがあるか厳格チェック
             if (currentGame.getPlayerCard(inputName) != null) {
                 int suffix = 1;
-                // 空いている最小の番号（佐藤1, 佐藤2...）が見つかるまでループ
                 while (currentGame.getPlayerCard(inputName + suffix) != null) {
                     suffix++;
                 }
                 uniqueName = inputName + suffix;
             }
 
-            // 確定した唯一無二の名前をセッションと変数に焼き付ける
+            // セッションと変数に唯一無二の名前を固定
             session.setAttribute("myConfirmedName", uniqueName);
             confirmedName = uniqueName;
             
-            // 新規参加なので、古い端末のカード記憶が残っていれば一旦消去して新しく作らせる
+            // 新規参加なのでブラウザに残っている古いカード記憶を必ず破棄
             session.removeAttribute("card");
         }
 
-        // 🌟【Render切断からの復旧ロジック】ボタンを押していないリフレッシュ時などの救済
+        // Renderセッション切断時の自動救済
         if (confirmedName == null || confirmedName.isEmpty()) {
             String backupName = request.getParameter("playerName");
             if (backupName != null && !backupName.isEmpty()) {
@@ -175,11 +172,10 @@ public class BingoServlet extends HttpServlet {
             }
         }
 
-        // 🌟【カードの同期処理】
+        // カードの同期
         @SuppressWarnings("unchecked")
         List<List<String>> card = (List<List<String>>) session.getAttribute("card");
         
-        // セッションから消えていたらサーバー共通メモリから執念深く回収
         if (card == null && confirmedName != null && !confirmedName.isEmpty()) {
             card = currentGame.getPlayerCard(confirmedName);
             if (card != null) {
@@ -187,7 +183,6 @@ public class BingoServlet extends HttpServlet {
             }
         }
         
-        // サーバー側に未登録なら同期する
         if (card != null && confirmedName != null && !confirmedName.isEmpty()) {
             currentGame.setPlayerCard(confirmedName, card);
         }
