@@ -98,30 +98,56 @@ public class BingoServlet extends HttpServlet {
             targetGameId = (String) session.getAttribute("myCurrentGameId");
         }
 
-        if (targetGameId != null && targetGameId.length() == 4 && games.containsKey(targetGameId)) {
-            session.setAttribute("myCurrentGameId", targetGameId);
-        } else {
+        // 🚨 部屋IDがどこにもない、またはサーバーに存在しない場合はセッションをクリアして完全に初期化
+        if (targetGameId == null || targetGameId.isEmpty() || !games.containsKey(targetGameId)) {
+            session.removeAttribute("card");
+            session.removeAttribute("myConfirmedName");
+            session.removeAttribute("myCurrentGameId");
             if (!"join".equals(action)) {
                 request.setAttribute("error", "⚠️ 部屋の指定が正しくないか、有効期限が切れています。");
                 request.getRequestDispatcher("index.jsp").forward(request, response);
                 return;
             }
+        } else {
+            session.setAttribute("myCurrentGameId", targetGameId);
         }
 
         BingoGame currentGame = games.get(targetGameId);
         if (currentGame == null) {
             session.removeAttribute("card");
+            session.removeAttribute("myConfirmedName");
+            session.removeAttribute("myCurrentGameId");
             request.setAttribute("error", "⚠️ お探しのビンゴ部屋が見つかりませんでした。");
             request.getRequestDispatcher("index.jsp").forward(request, response);
             return;
         }
 
-        if (currentGame.getDrawnNumbers().isEmpty()) {
+        // 🚨【連動リセットの核心ロジック】
+        // 司会者がリセットした、あるいはサーバーが再起動して出た数字が0個かつプレイヤーが0人の場合、
+        // プレイヤー側の古いセッション記憶を完全に抹殺し、強制的にID入力画面に戻す
+        if (currentGame.getDrawnNumbers().isEmpty() && currentGame.getPlayerCount() == 0) {
             session.removeAttribute("card");
             session.removeAttribute("myConfirmedName");
+            // もしjoin（ログイン試行）以外のアクセスであれば、入力をやり直させるためクリアして初期遷移
+            if (!"join".equals(action)) {
+                request.setAttribute("confirmedPlayerName", "");
+                request.setAttribute("game", currentGame);
+                request.getRequestDispatcher("index.jsp").forward(request, response);
+                return;
+            }
         }
 
         String confirmedName = (String) session.getAttribute("myConfirmedName");
+
+        // 🚨 セッションに名前があるが、サーバー側の全プレイヤーリストに自分が含まれていない場合（司会者リセット後など）
+        // セッションをクリアして再ログインを促す
+        if (confirmedName != null && !confirmedName.isEmpty()) {
+            if (!currentGame.getAllPlayers().contains(confirmedName)) {
+                session.removeAttribute("card");
+                session.removeAttribute("myConfirmedName");
+                confirmedName = null;
+            }
+        }
 
         // 🚪 部屋に入る（join）ボタンを押した時の処理
         if ("join".equals(action)) {
@@ -138,7 +164,7 @@ public class BingoServlet extends HttpServlet {
 
             String uniqueName = inputName;
             
-            // ⚡【超重要】ほぼ同時に2つの端末からリクエストが来ても、確実に1人ずつ処理を実行させる防壁
+            // 同時アクセス競合防止の同期ブロック
             synchronized (currentGame) {
                 if (currentGame.getPlayerCard(inputName) != null) {
                     int suffix = 1;
@@ -148,7 +174,7 @@ public class BingoServlet extends HttpServlet {
                     uniqueName = inputName + suffix;
                 }
                 
-                // 仮の空カードをこの時点で即座に確保して、次の端末が同じ名前でチェックした時にヒットさせる
+                // 仮の空カードを確保して名前をロック
                 currentGame.setPlayerCard(uniqueName, new ArrayList<>());
             }
 
@@ -170,7 +196,6 @@ public class BingoServlet extends HttpServlet {
         
         if (card == null && confirmedName != null && !confirmedName.isEmpty()) {
             card = currentGame.getPlayerCard(confirmedName);
-            // さきほどjoin内で作った「中身が空のリスト」の場合は、新しく作り直させるためにnull扱いにする
             if (card != null && card.isEmpty()) {
                 card = null;
             }
