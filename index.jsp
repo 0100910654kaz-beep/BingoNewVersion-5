@@ -100,10 +100,12 @@
         .firework { font-size: 80px; animation: bounce 0.6s infinite alternate; }
         @keyframes bounce { from { transform: scale(1); } to { transform: scale(1.2); } }
     </style>
-    <% if (game != null && !myBingo) { %>
+    
+    <%-- 🌐 部屋にログインしている場合、5秒ごとの更新URLに必ず「現在のgameId」を付加して部屋を完全固定する --%>
+    <% if (game != null && !gameId.isEmpty() && !myBingo) { %>
         <script>
             setInterval(function() {
-                window.location.href = "BingoServlet?userType=player";
+                window.location.href = "BingoServlet?userType=player&gameId=<%= gameId %>";
             }, 5000);
         </script>
     <% } %>
@@ -111,7 +113,8 @@
 <body>
 
 <% if (myBingo) { %>
-    <div class="overlay" onclick="window.location.href='BingoServlet?userType=player'">
+    <%-- 🏆 ビンゴ画面のタップ時、および自動更新時にも「現在のgameId」を確実に維持 --%>
+    <div class="overlay" onclick="window.location.href='BingoServlet?userType=player&gameId=<%= gameId %>'">
         <div class="firework">🎆🏆</div>
         <h1 style="font-size:36px; color:#ffd166; margin:10px 0;">BINGO !!</h1>
         <p style="font-size:18px; font-weight:bold;"><%= playerName %> さん、おめでとうございます！</p>
@@ -119,7 +122,7 @@
     </div>
     <script>
         setInterval(function() {
-            window.location.href = "BingoServlet?userType=player";
+            window.location.href = "BingoServlet?userType=player&gameId=<%= gameId %>";
         }, 5000);
     </script>
 <% } %>
