@@ -35,12 +35,12 @@ public class BingoServlet extends HttpServlet {
         request.setCharacterEncoding("UTF-8");
         String action = request.getParameter("action");
         String userType = request.getParameter("userType"); 
-        String urlGameId = request.getParameter("gameId"); // 🌐 URLから部屋IDを直接監視
+        String urlGameId = request.getParameter("gameId"); // 🌐 URLの部屋IDを直接監視
         ServletContext application = getServletContext();
         HttpSession session = request.getSession();
         
         Map<String, BingoGame> games = getGamesMap(application);
-        
+
         // ⏱️ 1. 定期自動期限チェック
         if (!games.isEmpty()) {
             games.entrySet().removeIf(entry -> {
@@ -49,24 +49,29 @@ public class BingoServlet extends HttpServlet {
             });
         }
 
-        String confirmedName = (String) session.getAttribute("myConfirmedName");
-        String sessionGameId = null;
-
-        // 🛠️ 2. 司会者(admin)向けの完全独立処理
+        // 🎤 2. 司会者(admin)向けの完全リセット・独立処理
         if ("admin".equals(userType)) {
-            // ⭐【最重要：上書き改悪の修正壁】
-            // URLに有効な4桁のgameIdが含まれている場合のみ、その部屋を管理対象とする。
-            // 大山専用リンクのようにURLに部屋IDが含まれていない場合は、セッションの古い記憶を引き継がず、
-            // 完全に空っぽの状態（新規作成待ち状態）としてスタートさせることで、別タブでの部屋混ざりを100%防ぎます。
-            if (urlGameId != null && urlGameId.length() == 4 && games.containsKey(urlGameId)) {
-                sessionGameId = urlGameId;
+            
+            // ⭐【バグ根絶の防衛壁】
+            // 大山専用リンクのように、URLに「&gameId=4桁」が含まれていない場合は、
+            // セッションに眠る古い部屋IDの記憶を完全に抹殺(クリア)します。
+            // これにより、新しいタブでリンクを開くたびに100%確実に新しい部屋を作成できます。
+            if (urlGameId == null || urlGameId.length() != 4 || !games.containsKey(urlGameId)) {
+                if (!"create".equals(action)) {
+                    session.removeAttribute("myCurrentGameId");
+                }
+            } else {
+                // URLに正しい4桁IDがある場合のみ、その部屋IDをセッションに上書き維持する
+                session.setAttribute("myCurrentGameId", urlGameId);
             }
 
+            String sessionGameId = (String) session.getAttribute("myCurrentGameId");
             BingoGame currentGame = null;
             if (sessionGameId != null) {
                 currentGame = games.get(sessionGameId);
             }
 
+            // 新規部屋作成
             if ("create".equals(action)) {
                 String validDaysParam = request.getParameter("validDays");
                 int validDays = 8; 
@@ -78,7 +83,6 @@ public class BingoServlet extends HttpServlet {
                     }
                 }
                 
-                // 絶対に他と被らない4桁の部屋番号(ID)を自動生成
                 String newGameId;
                 do {
                     newGameId = String.format("%04d", (int)(Math.random() * 10000));
@@ -86,7 +90,9 @@ public class BingoServlet extends HttpServlet {
                 
                 currentGame = new BingoGame(newGameId, validDays);
                 games.put(newGameId, currentGame);
+                
                 sessionGameId = newGameId;
+                session.setAttribute("myCurrentGameId", sessionGameId);
                 
             } else if ("draw".equals(action)) {
                 if (currentGame != null) {
@@ -106,6 +112,7 @@ public class BingoServlet extends HttpServlet {
             } else if ("reset".equals(action)) {
                 if (sessionGameId != null) {
                     games.remove(sessionGameId);
+                    session.removeAttribute("myCurrentGameId");
                     sessionGameId = null;
                     currentGame = null;
                 }
@@ -116,14 +123,15 @@ public class BingoServlet extends HttpServlet {
             return;
         }
 
-        // 👤 3. 一般プレイヤー向けの完全独立処理
-        // プレイヤーの場合は、URLパラメータ、またはセッションから部屋IDを特定
+        // 👤 3. 一般プレイヤー向けの処理
+        String sessionGameId = (String) session.getAttribute("myCurrentGameId");
         if (urlGameId != null && urlGameId.length() == 4 && games.containsKey(urlGameId)) {
             sessionGameId = urlGameId;
-        } else {
-            sessionGameId = (String) session.getAttribute("myCurrentGameId");
+            session.setAttribute("myCurrentGameId", sessionGameId);
         }
 
+        String confirmedName = (String) session.getAttribute("myConfirmedName");
+        
         if (action == null && sessionGameId == null) {
             response.sendRedirect("index.jsp");
             return;
