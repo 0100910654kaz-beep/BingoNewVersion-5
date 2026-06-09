@@ -6,7 +6,7 @@
 <%@ page import="java.util.Collections" %>
 <%
     BingoGame game = (BingoGame) request.getAttribute("game");
-    String gameId = (game != null) ? game.getGameId() : "まだ開始していません";
+    String gameId = (game != null) ? game.getGameId() : "";
 
     List<Integer> reverseDrawnNumbers = new ArrayList<>();
     int ballCount = 0;
@@ -40,18 +40,23 @@
         li { margin-bottom: 8px; font-size: 15px; }
     </style>
     <script>
-        // 5秒ごとに自動リロードして最新の参加状況やビンゴ者一覧を取得するタイマー
+        // 5秒ごとに自動リロードするタイマー
         setInterval(function() {
             var daysInput = document.getElementById("validDaysInput");
             if (daysInput) {
-                return; // まだ部屋を作っていない初期状態の時は自動リロードを完全に阻止
+                // 🛡️ まだ部屋を作成していない初期状態（大山専用リンクの直後など）の時は、
+                // 変なIDを付与せず、安全に大山専用のモードのままリロードさせます
+                window.location.href = "BingoServlet?userType=admin";
+                return;
             }
 
-            // ⚡【会場混ざりバグの完全修正壁】
-            // リロードするURLの末尾に、今画面に表示されている「自分自身の4桁の部屋番号」を確実に付与します。
-            // これにより、5秒リロードが走っても他の会場のデータに乗っ取られるのを100%防ぎます！
+            // 部屋がすでに作られている場合は、自身の4桁部屋IDを確実にくっつけてリロード
             var currentGameId = "<%= gameId %>";
-            window.location.href = "BingoServlet?userType=admin&gameId=" + currentGameId;
+            if (currentGameId && currentGameId !== "") {
+                window.location.href = "BingoServlet?userType=admin&gameId=" + currentGameId;
+            } else {
+                window.location.href = "BingoServlet?userType=admin";
+            }
         }, 5000);
     </script>
 </head>
@@ -61,11 +66,13 @@
     <h1>🎤 ビンゴ大会 司会者コントロール 🎤</h1>
 
     <div class="info-panel">
-        部屋番号 (ゲームID): <span style="font-size: 24px; font-weight: bold; color: #e63946;"><%= gameId %></span>
-        <span style="font-size: 14px; color: #6c757d; margin-left: 15px;">(現在の参加者数: <%= (game != null) ? game.getPlayerCount() : 0 %> 人)</span>
+        部屋番号 (ゲームID): <span style="font-size: 24px; font-weight: bold; color: #e63946;"><%= (gameId.isEmpty()) ? "まだ開始していません" : gameId %></span>
+        <% if (game != null) { %>
+            <span style="font-size: 14px; color: #6c757d; margin-left: 15px;">(現在の参加者数: <%= game.getPlayerCount() %> 人)</span>
+        <% } %>
     </div>
 
-    <% if (game == null || "まだ開始していません".equals(gameId)) { %>
+    <% if (game == null || gameId.isEmpty()) { %>
         <div class="panel" style="text-align: center; margin-bottom: 20px; background: #fff5f5;">
             <p style="font-weight: bold; color: #c92a2a; margin-top: 0;">ビンゴゲームの部屋がまだ作成されていません。</p>
             <form action="BingoServlet" method="get">
@@ -79,7 +86,7 @@
         </div>
     <% } %>
 
-    <% if (game != null && !"まだ開始していません".equals(gameId)) { %>
+    <% if (game != null && !gameId.isEmpty()) { %>
         <div style="margin-bottom: 25px;">
             <form action="BingoServlet" method="get" style="display:inline;">
                 <input type="hidden" name="userType" value="admin">
@@ -141,7 +148,7 @@
                         <li><strong><%= currentRank %>位</strong>: <%= p.getPlayerName() %> さん <span style="color:#e63946; font-weight:bold;">(🔑<%= p.getDrawnNumberAtBingo() %>番でビンゴ!)</span></li>
                     <% 
                        } 
-                       if (bingoList.isEmpty()) { %> <p style="color:#888;">まだビンゴした人はいません</p> <% } \
+                       if (bingoList.isEmpty()) { %> <p style="color:#888;">まだビンゴした人はいません</p> <% } 
                     %>
                 </ul>
 
