@@ -23,11 +23,10 @@ RUN find . -name "*.java" | xargs javac -classpath "/usr/local/tomcat/lib/*" -d 
 # 【カード表示のための重要設定】セッション（記憶部屋）のクッキーパスをEclipse互換に強制変更
 RUN sed -i 's/<Context>/<Context sessionCookiePathUsesTrailingSlash="false">/' /usr/local/tomcat/conf/context.xml
 
-# 🛠️【超重要：Render用バグ根絶設定】
-# Renderのヘルスチェック(HEADリクエスト)をTomcatがシャットダウン命令と誤認するバグを回避するため、
-# シャットダウンポートを「-1」(無効)に強制上書きします。これにより勝手な再起動や二重起動が完全に止まります。
-RUN sed -i 's/port="8005" shutdown="SHUTDOWN"/port="-1" shutdown="SHUTDOWN"/' /usr/local/tomcat/conf/server.xml
-
-# ポート番号の設定（Render用）
+# =========================================================================
+# 🛠️ 【Render暴走停止のための最重要修正】
+# Tomcatの標準ポート設定（server.xml）を、Renderから指定されるPORT環境変数で強制上書きします。
+# これにより、Renderが迷子にならずにヘルスチェックが完全に一発で成功するようになります。
+# =========================================================================
 EXPOSE 8080
-CMD ["catalina.sh", "run"]
+CMD ["sh", "-c", "sed -i \"s/port=\\\"8080\\\"/port=\\\"${PORT:-8080}\\\"/g\" /usr/local/tomcat/conf/server.xml && catalina.sh run"]
