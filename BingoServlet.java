@@ -35,19 +35,13 @@ public class BingoServlet extends HttpServlet {
         request.setCharacterEncoding("UTF-8");
         String action = request.getParameter("action");
         String userType = request.getParameter("userType"); 
-        String urlGameId = request.getParameter("gameId"); // 🌐 URLから直接IDを監視
+        String urlGameId = request.getParameter("gameId"); // 🌐 URLから部屋IDを直接監視
         ServletContext application = getServletContext();
         HttpSession session = request.getSession();
         
         Map<String, BingoGame> games = getGamesMap(application);
-        String sessionGameId = (String) session.getAttribute("myCurrentGameId");
         
-        // 🛡️ URLから有効な4桁IDが来ている場合は、セッションよりもURLの指定を最優先する
-        if (urlGameId != null && urlGameId.length() == 4 && games.containsKey(urlGameId)) {
-            sessionGameId = urlGameId;
-            session.setAttribute("myCurrentGameId", sessionGameId);
-        }
-
+        // ⏱️ 1. 定期自動期限チェック
         if (!games.isEmpty()) {
             games.entrySet().removeIf(entry -> {
                 BingoGame g = entry.getValue();
@@ -56,17 +50,20 @@ public class BingoServlet extends HttpServlet {
         }
 
         String confirmedName = (String) session.getAttribute("myConfirmedName");
-        
-        if (action == null && !"admin".equals(userType) && sessionGameId == null) {
-            response.sendRedirect("index.jsp");
-            return;
-        }
+        String sessionGameId = null;
 
+        // 🛠️ 2. 司会者(admin)向けの完全独立処理
         if ("admin".equals(userType)) {
+            // ⭐【最重要：上書き改悪の修正壁】
+            // URLに有効な4桁のgameIdが含まれている場合のみ、その部屋を管理対象とする。
+            // 大山専用リンクのようにURLに部屋IDが含まれていない場合は、セッションの古い記憶を引き継がず、
+            // 完全に空っぽの状態（新規作成待ち状態）としてスタートさせることで、別タブでの部屋混ざりを100%防ぎます。
+            if (urlGameId != null && urlGameId.length() == 4 && games.containsKey(urlGameId)) {
+                sessionGameId = urlGameId;
+            }
+
             BingoGame currentGame = null;
-            
-            // 適切な4桁IDの場合のみ下駄箱からデータを取得（日本語のゴミデータを完全排除）
-            if (sessionGameId != null && sessionGameId.length() == 4) {
+            if (sessionGameId != null) {
                 currentGame = games.get(sessionGameId);
             }
 
@@ -81,6 +78,7 @@ public class BingoServlet extends HttpServlet {
                     }
                 }
                 
+                // 絶対に他と被らない4桁の部屋番号(ID)を自動生成
                 String newGameId;
                 do {
                     newGameId = String.format("%04d", (int)(Math.random() * 10000));
@@ -88,9 +86,7 @@ public class BingoServlet extends HttpServlet {
                 
                 currentGame = new BingoGame(newGameId, validDays);
                 games.put(newGameId, currentGame);
-                
                 sessionGameId = newGameId;
-                session.setAttribute("myCurrentGameId", sessionGameId);
                 
             } else if ("draw".equals(action)) {
                 if (currentGame != null) {
@@ -110,7 +106,6 @@ public class BingoServlet extends HttpServlet {
             } else if ("reset".equals(action)) {
                 if (sessionGameId != null) {
                     games.remove(sessionGameId);
-                    session.removeAttribute("myCurrentGameId");
                     sessionGameId = null;
                     currentGame = null;
                 }
@@ -118,6 +113,19 @@ public class BingoServlet extends HttpServlet {
 
             request.setAttribute("game", currentGame);
             request.getRequestDispatcher("admin.jsp").forward(request, response);
+            return;
+        }
+
+        // 👤 3. 一般プレイヤー向けの完全独立処理
+        // プレイヤーの場合は、URLパラメータ、またはセッションから部屋IDを特定
+        if (urlGameId != null && urlGameId.length() == 4 && games.containsKey(urlGameId)) {
+            sessionGameId = urlGameId;
+        } else {
+            sessionGameId = (String) session.getAttribute("myCurrentGameId");
+        }
+
+        if (action == null && sessionGameId == null) {
+            response.sendRedirect("index.jsp");
             return;
         }
 
