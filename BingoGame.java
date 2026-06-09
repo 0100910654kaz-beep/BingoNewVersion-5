@@ -59,17 +59,15 @@ public class BingoGame implements Serializable {
         
         drawnNumbers.add(nextNum);
 
-        // 新しい数字が出たので、全登録プレイヤーのリーチ・ビンゴ状態を一斉に再計算（完全分離）
+        // 新しい数字が出たので、全登録プレイヤーの状態を一斉に再計算
         List<PlayerResult> currentBingo = new ArrayList<>();
         List<PlayerResult> currentReach = new ArrayList<>();
         ConcurrentHashMap<String, List<String>> newWaitNumbers = new ConcurrentHashMap<>();
 
-        // allPlayersに登録されている「佐藤」「佐藤1」など一意の名前で正確にループ
         for (String pName : allPlayers) {
             List<List<String>> card = playerCards.get(pName);
             if (card == null) continue;
 
-            // 縦・横・斜めのラインチェック
             boolean[][] hits = new boolean[5][5];
             for (int r = 0; r < 5; r++) {
                 for (int c = 0; c < 5; c++) {
@@ -132,14 +130,14 @@ public class BingoGame implements Serializable {
                 }
             }
 
-            // 斜め（右上から左下）
+            // 斜め（右上から左下）👉【★ここを完璧に修正しました】
             {
                 int missingCount = 0;
                 String lastMissingNum = "";
                 for (int i = 0; i < 5; i++) {
                     if (!hits[i][4 - i]) {
                         missingCount++;
-                        lastMissingNum = card.get(i)[4 - i]; // リストアクセスに修正
+                        lastMissingNum = card.get(i).get(4 - i);
                     }
                 }
                 if (missingCount == 0) bingoLines++;
@@ -148,19 +146,14 @@ public class BingoGame implements Serializable {
                 }
             }
 
-            // 【判定割り振り】
             if (bingoLines > 0) {
-                // ビンゴ達成
                 currentBingo.add(new PlayerResult(pName, new Date(), nextNum));
             } else if (!waitNumsForThisPlayer.isEmpty()) {
-                // リーチ達成（佐藤、佐藤1それぞれの待機数字を完全隔離保存）
                 currentReach.add(new PlayerResult(pName, new Date(), nextNum));
                 newWaitNumbers.put(pName, waitNumsForThisPlayer);
             }
         }
 
-        // 共通メモリのビンゴ・リーチリストを最新に更新
-        // すでにビンゴしている人は順番を維持
         for (PlayerResult newB : currentBingo) {
             boolean alreadyBingo = false;
             for (PlayerResult oldB : bingoPlayers) {
@@ -172,7 +165,6 @@ public class BingoGame implements Serializable {
             }
         }
 
-        // リーチリストの同期（完全に独立した名前で照合）
         reachPlayers.clear();
         for (PlayerResult newR : currentReach) {
             boolean inBingo = false;
@@ -188,7 +180,6 @@ public class BingoGame implements Serializable {
         playerWaitNumbers.putAll(newWaitNumbers);
     }
 
-    // プレイヤー単体のリアルタイムステータスチェック用（画面リフレッシュ時等に駆動）
     public synchronized void checkPlayerStatus(String name, List<List<String>> card) {
         if (name == null || card == null) return;
 
@@ -239,7 +230,6 @@ public class BingoGame implements Serializable {
                 bingoPlayers.add(0, new PlayerResult(name, new Date(), lastNum));
                 lastBingoTime = new Date();
             }
-            // ビンゴしたらリーチ側からは消去
             reachPlayers.removeIf(p -> p.getPlayerName().equals(name));
             playerWaitNumbers.remove(name);
         } else if (!waitNums.isEmpty()) {
@@ -264,11 +254,14 @@ public class BingoGame implements Serializable {
         bingoPlayers.clear();
         reachPlayers.clear();
         playerWaitNumbers.clear();
-        // 部屋自体のリセット時はカードと参加者名簿も一掃して完全初期化
         playerCards.clear();
         allPlayers.clear();
         anonymousCount = 0;
         lastBingoTime = new Date();
+    }
+
+    public synchronized List<String> getWaitNumbers(String name) {
+        return playerWaitNumbers.getOrDefault(name, new ArrayList<>());
     }
 
     public boolean isExpired() { return new Date().after(this.expireTime); }
