@@ -9,14 +9,12 @@
     }
     if (playerName == null) { playerName = ""; }
 
-    // ⚡【重要・カード切り替えの鍵】司会者がリセット（数字が0個）したら、古いカードを即座に破棄！
     if (game != null && game.getDrawnNumbers().isEmpty()) {
         session.removeAttribute("card");
     }
 
     List<List<String>> bingoCard = (List<List<String>>) session.getAttribute("card");
 
-    // 🎲 カードが破棄されて空っぽになったら、名前を維持したまま、新しいランダムカードを全自動で再生成！
     if (bingoCard == null && game != null && !playerName.isEmpty()) {
         List<List<Integer>> columns = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
@@ -33,19 +31,17 @@
             List<String> rowList = new ArrayList<>();
             for (int col = 0; col < 5; col++) {
                 if (row == 2 && col == 2) {
-                    rowList.add("0"); // 真ん中はFREE
+                    rowList.add("0");
                 } else {
                     rowList.add(String.valueOf(columns.get(col).get(row)));
                 }
             }
             bingoCard.add(rowList);
         }
-        // 生成したカードをセッションとゲーム内共通メモリに同時に焼き付ける（完全同期）
         session.setAttribute("card", bingoCard);
         game.setPlayerCard(playerName, bingoCard);
     }
 
-    // 最新の当選状況に合わせてバックグラウンドでリーチ・ビンゴを自動チェック
     if (game != null && bingoCard != null && !playerName.isEmpty()) {
         game.checkPlayerStatus(playerName, bingoCard);
     }
@@ -93,7 +89,6 @@
 <div class="container">
     <h1>🎉 ビンゴ大会</h1>
 
-    <%-- 🚪 部屋に参加していない（初期状態）時のログインフォーム --%>
     <% if (game == null || playerName.isEmpty()) { %>
         <div class="login-container">
             <h2 style="font-size: 18px; margin-bottom: 15px; color:#555;">ゲームに参加する</h2>
@@ -114,7 +109,6 @@
                     <label for="playerName">👤 あなたのお名前</label>
                     <input type="text" id="playerName" name="playerName" placeholder="例: 佐藤" required>
                     
-                    <%-- 💡 同姓同名トラブルを未然に防ぐための強力な注意書きを追加 --%>
                     <p style="color: #e63946; font-size: 12px; margin-top: 8px; margin-bottom: 0; line-height: 1.5; font-weight: bold; text-align: left;">
                         ⚠️ ※同姓同名の方がいる場合は、後ろに番号やニックネーム（例：さとう２）の様に番号をつけて唯一無二の名前に成るようにしてください
                     </p>
@@ -125,19 +119,16 @@
         </div>
     <% } else { %>
         
-        <%-- 🎮 ログイン成功後のメインビンゴ画面 --%>
         <div class="player-info">
             <p style="font-size: 16px; margin: 0; font-weight: bold;">
                 部屋: <span style="color: #007bff;"><%= gameId %></span> ｜ 
                 名前: <span style="color: #2b3a42;"><%= playerName %> さん</span>
             </p>
-            <%-- 💡 システム側でナンバリング変換が行われたことをプレイヤーに優しく共有 --%>
             <p style="font-size: 11px; color: #666; margin: 5px 0 0 0; line-height: 1.3;">
                 ※同じ名前の人が同じ部屋にいた場合、後ろに自動で番号がついている場合があります。
             </p>
         </div>
 
-        <%-- 状態表示バナー（全自動リアルタイム反映） --%>
         <%
             boolean isBingo = false;
             for (PlayerResult p : game.getBingoPlayers()) {
@@ -188,7 +179,8 @@
                         <div class="history-cell newest" style="background:#ff6b6b; color:white;"><%= num %></div>
                     <% } else { %>
                         <div class="history-cell"><%= num %></div>
-                    <% }\n                } %>
+                    <% }
+                } %>
             </div>
         </div>
     <% } %>
