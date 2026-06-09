@@ -47,8 +47,8 @@
     <script>
         // 5秒ごとに自動リロードして最新の参加状況やビンゴ者一覧を取得
         setInterval(function() {
-            // ⚡【重要】画面内に「有効日数の入力欄(validDaysInput)」が存在している間は、
-            // まだ部屋を作成していない初期画面ですので、5秒タイマーの自動リロード処理を完全に停止します！
+            // ⚡【重要】画面内に「有効日数の入力欄(id="validDaysInput")」が存在している間は、
+            // まだ部屋を作成していない初期画面ですので、5秒タイマーの自動リロード処理を完全にストップします！
             var daysInput = document.getElementById("validDaysInput");
             if (daysInput) {
                 return; 
