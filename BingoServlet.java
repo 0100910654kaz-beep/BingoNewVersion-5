@@ -1,5 +1,106 @@
-// =================================================================
-        // 👤 3. 一般プレイヤー向けの処理（完全にURL/パラメータ優先へ修正）
+package servlet;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+
+@WebServlet("/BingoServlet")
+public class BingoServlet extends HttpServlet {
+    private static final long serialVersionUID = 1L;
+
+    // 全てのビンゴ部屋を管理する共通メモリスペース（サーバー起動中、永続保持）
+    private static final ConcurrentHashMap<String, BingoGame> games = new ConcurrentHashMap<>();
+
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) 
+            throws ServletException, IOException {
+        processRequest(request, response);
+    }
+
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) 
+            throws ServletException, IOException {
+        processRequest(request, response);
+    }
+
+    private void processRequest(HttpServletRequest request, HttpServletResponse response) 
+            throws ServletException, IOException {
+        
+        request.setCharacterEncoding("UTF-8");
+        response.setContentType("text/html; charset=UTF-8");
+        HttpSession session = request.getSession(true);
+
+        String action = request.getParameter("action");
+
+        // =================================================================
+        // 👑 1. 司会者（管理者）向けの処理
+        // =================================================================
+        if ("createRoom".equals(action)) {
+            // ランダムでユニークな4桁の部屋IDを生成
+            String newGameId;
+            synchronized (games) {
+                do {
+                    newGameId = String.format("%04d", (int)(Math.random() * 10000));
+                } while (games.containsKey(newGameId));
+                
+                // 有効期間を3日としてゲームインスタンスを作成
+                BingoGame newGame = new BingoGame(newGameId, 3);
+                games.put(newGameId, newGame);
+            }
+            
+            session.setAttribute("adminGameId", newGameId);
+            response.sendRedirect("BingoServlet?action=adminPage&gameId=" + newGameId);
+            return;
+        }
+
+        if ("adminPage".equals(action)) {
+            String gameId = request.getParameter("gameId");
+            if (gameId == null || gameId.isEmpty()) {
+                gameId = (String) session.getAttribute("adminGameId");
+            }
+            
+            BingoGame game = games.get(gameId);
+            if (game == null) {
+                request.setAttribute("error", "⚠️ 指定された部屋が存在しないか、有効期限が切れています。");
+                request.getRequestDispatcher("index.jsp").forward(request, response);
+                return;
+            }
+            
+            session.setAttribute("adminGameId", gameId);
+            request.setAttribute("game", game);
+            request.getRequestDispatcher("admin.jsp").forward(request, response);
+            return;
+        }
+
+        if ("draw".equals(action)) {
+            String gameId = (String) session.getAttribute("adminGameId");
+            BingoGame game = games.get(gameId);
+            if (game != null) {
+                game.drawNumber(); // 抽選処理（内部で自動リーチ・ビンゴ判定を駆動）
+            }
+            response.sendRedirect("BingoServlet?action=adminPage&gameId=" + gameId);
+            return;
+        }
+
+        if ("resetGame".equals(action)) {
+            String gameId = (String) session.getAttribute("adminGameId");
+            BingoGame game = games.get(gameId);
+            if (game != null) {
+                game.resetGame(); // 当選番号や当選者リストの完全初期化
+            }
+            response.sendRedirect("BingoServlet?action=adminPage&gameId=" + gameId);
+            return;
+        }
+
+        // =================================================================
+        // 👤 2. 一般プレイヤー向けの処理（完全にURL/パラメータ優先へ修正）
         // =================================================================
         
         // ⚡【超重要】セッションの記憶よりも、現在アクセスしようとしている「URLの部屋ID」を絶対最優先にする
@@ -24,65 +125,59 @@
 
         String confirmedName = (String) session.getAttribute("myConfirmedName");
         
-        // 🌟【★超重要・追加ロジック】Renderがセッションを切断した際の自動救済
+        // 🌟【★超重要ロジック】Renderがセッションを切断した際の自動救済
         // セッションから名前が消えていても、URLやリフレッシュのパラメータに名前が残っていれば執念深く復旧する！
         if (confirmedName == null || confirmedName.isEmpty()) {
-            confirmedName = request.getParameter("playerName");
-            if (confirmedName != null && !confirmedName.trim().isEmpty()) {
-                confirmedName = confirmedName.trim();
-                session.setAttribute("myConfirmedName", confirmedName); // セッションに再保存
+            String backupName = request.getParameter("playerName");
+            if (backupName != null && !backupName.isEmpty()) {
+                confirmedName = backupName.trim();
+                session.setAttribute("myConfirmedName", confirmedName);
             }
         }
-        
-        // 【参加処理】
+
+        // 🚪 一般プレイヤーの「部屋に入る（join）」新規参加・復帰の受付処理
         if ("join".equals(action)) {
-            String inputGameId = request.getParameter("gameId");
             String inputName = request.getParameter("playerName");
+            String inputGameId = request.getParameter("gameId");
+
+            if (inputGameId == null || inputGameId.length() != 4 || !games.containsKey(inputGameId)) {
+                request.setAttribute("error", "⚠️ 正しい4桁の部屋番号を入力してください。");
+                request.getRequestDispatcher("index.jsp").forward(request, response);
+                return;
+            }
 
             if (inputName == null || inputName.trim().isEmpty()) {
-                request.setAttribute("error", "⚠️ 名前を入力してください。");
+                request.setAttribute("error", "⚠️ お名前を入力してください。");
                 request.getRequestDispatcher("index.jsp").forward(request, response);
                 return;
             }
+
             inputName = inputName.trim();
+            BingoGame targetGame = games.get(inputGameId);
+            String uniqueName = inputName;
 
-            if (inputGameId != null && games.containsKey(inputGameId)) {
-                BingoGame targetGame = games.get(inputGameId);
-                
-                if (confirmedName != null && !confirmedName.equals(inputName)) {
-                    // 古い部屋からプレイヤーを削除
-                    String oldGameId = (String) session.getAttribute("myCurrentGameId");
-                    if (oldGameId != null) {
-                        BingoGame oldGame = games.get(oldGameId);
-                        if (oldGame != null) {
-                            oldGame.getAllPlayers().remove(confirmedName);
-                        }
-                    }
+            // ⚡【同姓同名ナンバリング自動付与システム】
+            // すでに同じ名前のプレイヤーがその部屋にカードを持っているか確認
+            if (targetGame.getPlayerCard(inputName) != null) {
+                int suffix = 1;
+                // 「名前1」「名前2」「名前3」と順番に確認していき、まだ使われていない最小の空き番号を見つける
+                while (targetGame.getPlayerCard(inputName + suffix) != null) {
+                    suffix++;
                 }
-                
-                if (!targetGame.getAllPlayers().contains(inputName)) {
-                    targetGame.getAllPlayers().add(inputName);
-                }
-                
-                confirmedName = inputName;
-                targetGameId = inputGameId; // ターゲットIDを上書き
-                
-                session.setAttribute("myConfirmedName", confirmedName);
-                session.setAttribute("myCurrentGameId", targetGameId); 
-            } else {
-                request.setAttribute("error", "⚠️ 指定された部屋番号（" + inputGameId + "）は存在しないか、有効期限切れです。");
-                request.getRequestDispatcher("index.jsp").forward(request, response);
-                return;
+                // 空いていた一意の番号（例：佐藤1）を正式なプレイヤー名に決定
+                uniqueName = inputName + suffix;
             }
+
+            // セッション情報を固定
+            session.setAttribute("myCurrentGameId", inputGameId);
+            session.setAttribute("myConfirmedName", uniqueName);
+            
+            targetGameId = inputGameId;
+            confirmedName = uniqueName;
         }
 
-        // 確定した部屋IDからゲームオブジェクトを取得
-        BingoGame currentGame = null;
-        if (targetGameId != null && targetGameId.length() == 4) {
-            currentGame = games.get(targetGameId);
-        }
-
-        // 部屋が見つからない場合の安全策
+        // 現在アクセス中のビンゴゲームの取得
+        BingoGame currentGame = games.get(targetGameId);
         if (currentGame == null) {
             session.removeAttribute("card");
             request.setAttribute("error", "⚠️ お探しのビンゴ部屋が見つかりませんでした。");
@@ -119,5 +214,8 @@
         
         request.setAttribute("game", currentGame);
         request.setAttribute("confirmedPlayerName", confirmedName);
+        request.setAttribute("gameId", targetGameId);
+
         request.getRequestDispatcher("index.jsp").forward(request, response);
     }
+}
