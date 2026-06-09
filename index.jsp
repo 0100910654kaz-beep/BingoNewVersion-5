@@ -162,7 +162,7 @@
         </div>
 
         <% if (bingoCard != null) { %>
-            <table class=\"bingo-table\">
+            <table class="bingo-table">
                 <% for (int r = 0; r < 5; r++) { %>
                     <tr>
                         <% for (int c = 0; c < 5; c++) { 
@@ -180,12 +180,12 @@
         <% } %>
 
         <div class="list-box">
-            <h3 style="margin: 5px 0; font-size:13px; color:#555;">📊 出た数字一覧（最新が赤）</h3>
+            <h3 style="margin: 5px 0; font-size:14px;">📊 出た数字一覧（最新が赤）</h3>
             <div class="history-grid">
                 <% for (int i = 0; i < reverseDrawnNumbers.size(); i++) { 
                     int num = reverseDrawnNumbers.get(i);
                     if (i == 0) { %>
-                        <div class="history-cell" style="background:#ff6b6b; color:white; border-radius: 50%;"><%= num %></div>
+                        <div class="history-cell newest" style="background:#ff6b6b; color:white;"><%= num %></div>
                     <% } else { %>
                         <div class="history-cell"><%= num %></div>
                     <% }\n                } %>
