@@ -45,12 +45,12 @@
             var daysInput = document.getElementById("validDaysInput");
             if (daysInput) {
                 // 🛡️ まだ部屋を作成していない初期状態（大山専用リンクの直後など）の時は、
-                // 変なIDを付与せず、安全に大山専用のモードのままリロードさせます
+                // 余計なIDをくっつけず、クリーンな状態で大山専用リロードを行います
                 window.location.href = "BingoServlet?userType=admin";
                 return;
             }
 
-            // 部屋がすでに作られている場合は、自身の4桁部屋IDを確実にくっつけてリロード
+            // 部屋がすでに作られている場合は、自身の4桁部屋IDを確実にくっつけて安全にリロード
             var currentGameId = "<%= gameId %>";
             if (currentGameId && currentGameId !== "") {
                 window.location.href = "BingoServlet?userType=admin&gameId=" + currentGameId;
