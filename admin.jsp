@@ -15,11 +15,6 @@
         ballCount = reverseDrawnNumbers.size();
         Collections.reverse(reverseDrawnNumbers);
     }
-
-    String currentValidDays = request.getParameter("validDays");
-    if (currentValidDays == null || currentValidDays.isEmpty()) {
-        currentValidDays = "8"; // 最初の初期値
-    }
 %>
 <!DOCTYPE html>
 <html>
@@ -47,11 +42,11 @@
     <script>
         // 5秒ごとに自動リロードして最新の参加状況やビンゴ者一覧を取得するタイマー
         setInterval(function() {
-            // ⚡【超重要】画面内に「有効日数の入力欄(id="validDaysInput")」がある＝まだ部屋を作っていない初期状態
-            // この時は、大山さんが日数をカチカチ変更している最中なので、5秒タイマーの自動リロードを【絶対に】動かさずストップします！
+            // ⚡ 画面内に部屋作成用の入力欄(id="validDaysInput")がある＝まだ部屋を作っていない初期状態
+            // この時は、大山さんが日数を変更している最中なので、5秒タイマーの自動更新リロードを完全にストップします！
             var daysInput = document.getElementById("validDaysInput");
             if (daysInput) {
-                return; // ここで処理を終了し、勝手なリロードを完全に阻止します
+                return; // 自動リロードを完全に阻止
             }
 
             // 部屋が作成された後は、ここを通って5秒ごとに安全にリアルタイム更新されます
@@ -76,7 +71,7 @@
                 <input type="hidden" name="userType" value="admin">
                 <input type="hidden" name="action" value="create">
                 <label style="font-weight: bold;">部屋の有効日数: </label>
-                <input type="number" id="validDaysInput" name="validDays" value="<%= currentValidDays %>" style="width:60px; padding:5px; text-align:center; font-size:16px;" min="1" required> 日間
+                <input type="number" id="validDaysInput" name="validDays" value="8" style="width:60px; padding:5px; text-align:center; font-size:16px;" min="1" required> 日間
                 <br><br>
                 <button type="submit" class="btn btn-draw" style="background:#228be6;">新規に部屋を作成する</button>
             </form>
@@ -149,7 +144,7 @@
                     %>
                 </ul>
 
-                <h3 style="margin-top: 25px;">🔥 リーチの人（全自動検知）</h3>
+                <h3 style="margin-top: 25px;">🔥 リーチの人（全全自動検知）</h3>
                 <ul>
                     <% for (PlayerResult p : game.getReachPlayers()) { %>
                         <li><strong><%= p.getPlayerName() %> さん</strong> <span style="color: #ff9800; font-size: 14px; font-weight: bold;">（あと <%= game.getWaitNumbers(p.getPlayerName()) %> 番でビンゴ！）</span></li>
