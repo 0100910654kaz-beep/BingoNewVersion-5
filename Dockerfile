@@ -23,9 +23,6 @@ RUN find . -name "*.java" | xargs javac -classpath "/usr/local/tomcat/lib/*" -d 
 # 【カード表示のための重要設定】セッション（記憶部屋）のクッキーパスをEclipse互換に強制変更
 RUN sed -i 's/<Context>/<Context sessionCookiePathUsesTrailingSlash="false">/' /usr/local/tomcat/conf/context.xml
 
-# 🔥【追加：重要】ヘルスチェック誤作動防止のため、Tomcatのシャットダウンポート(8005)を完全に無効化(-1)する
+# 🔥【最重要：毎秒の警告ログの完全停止】
+# server.xml内のシャットダウンポート設定を完全に「-1（無効）」にし、Renderからの誤認識を遮断する
 RUN sed -i 's/port="8005" shutdown="SHUTDOWN"/port="-1" shutdown="SHUTDOWN"/' /usr/local/tomcat/conf/server.xml
-
-# ポート番号の設定（Render用）
-EXPOSE 8080
-CMD ["catalina.sh", "run"]
