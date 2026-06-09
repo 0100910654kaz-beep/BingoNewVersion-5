@@ -45,16 +45,16 @@
         li { margin-bottom: 8px; font-size: 15px; }
     </style>
     <script>
-        // 5秒ごとに自動リロードして最新の参加状況やビンゴ者一覧を取得
+        // 5秒ごとに自動リロードして最新の参加状況やビンゴ者一覧を取得するタイマー
         setInterval(function() {
-            // ⚡【重要】画面内に「有効日数の入力欄(id="validDaysInput")」が存在している間は、
-            // まだ部屋を作成していない初期画面ですので、5秒タイマーの自動リロード処理を完全にストップします！
+            // ⚡【超重要】画面内に「有効日数の入力欄(id="validDaysInput")」がある＝まだ部屋を作っていない初期状態
+            // この時は、大山さんが日数をカチカチ変更している最中なので、5秒タイマーの自動リロードを【絶対に】動かさずストップします！
             var daysInput = document.getElementById("validDaysInput");
             if (daysInput) {
-                return; 
+                return; // ここで処理を終了し、勝手なリロードを完全に阻止します
             }
 
-            // 部屋作成後は、ここを通って5秒ごとにリアルタイム更新されます
+            // 部屋が作成された後は、ここを通って5秒ごとに安全にリアルタイム更新されます
             window.location.href = "BingoServlet?userType=admin";
         }, 5000);
     </script>
